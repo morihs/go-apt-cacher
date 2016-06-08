@@ -40,13 +40,16 @@ func (cm *cacheManager) download(w http.ResponseWriter, req *http.Request) {
 			//TODO
 			panic("failed to get")
 		}
+		defer res.Body.Close()
 
 		tmp, err := ioutil.TempFile(defaultTempdir, "test-")
 		if err != nil {
 			//TODO
 			panic("failed to create a temp file")
 		}
+
 		io.Copy(tmp, res.Body)
+
 		e.file = tmp
 		close(e.ready)
 	} else {
