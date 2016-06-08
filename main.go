@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -12,7 +11,8 @@ import (
 )
 
 const (
-	tmpdir = "."
+	defaultTempdir = "."
+	defaultListen  = "localhost:8000"
 )
 
 type entry struct {
@@ -26,8 +26,9 @@ type cacheManager struct {
 	cache map[string]*entry
 }
 
-func (cm *cacheManager) donwload(path string) string {
+func (cm *cacheManager) download(w http.ResponseWriter, req *http.Request) {
 	cm.mu.Lock()
+	path := req.URL.Path
 	e := cm.cache[path]
 	if e == nil {
 		e = &entry{ready: make(chan struct{})}
@@ -40,7 +41,7 @@ func (cm *cacheManager) donwload(path string) string {
 			panic("failed to get")
 		}
 
-		tmp, err := ioutil.TempFile(tmpdir, "test-")
+		tmp, err := ioutil.TempFile(defaultTempdir, "test-")
 		if err != nil {
 			//TODO
 			panic("failed to create a temp file")
@@ -52,18 +53,22 @@ func (cm *cacheManager) donwload(path string) string {
 		cm.mu.Unlock()
 		<-e.ready
 	}
-	return e.fd.Name()
+
+	b, _ := io.Copy(w, e.fd)
+	log.Print(b, "written")
 }
 
 func main() {
 	flag.Parse()
 	args := flag.Args()
 
-	if len(args) != 2 {
+	if len(args) != 1 {
 		log.Fatal("Wrong number of arguments.")
 	}
 
 	cm := cacheManager{base: args[0], cache: make(map[string]*entry)}
 
-	fmt.Println("test", cm.donwload(args[1]))
+	http.HandleFunc("/", cm.download)
+
+	log.Fatal(http.ListenAndServe(defaultListen, nil))
 }
