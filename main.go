@@ -16,7 +16,7 @@ const (
 )
 
 type entry struct {
-	fd    *os.File
+	file  *os.File
 	ready chan struct{}
 }
 
@@ -47,14 +47,14 @@ func (cm *cacheManager) download(w http.ResponseWriter, req *http.Request) {
 			panic("failed to create a temp file")
 		}
 		io.Copy(tmp, res.Body)
-		e.fd = tmp
+		e.file = tmp
 		close(e.ready)
 	} else {
 		cm.mu.Unlock()
 		<-e.ready
 	}
 
-	b, _ := io.Copy(w, e.fd)
+	b, _ := io.Copy(w, e.file)
 	log.Print(b, "written")
 }
 
