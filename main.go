@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
 	"sync"
 )
 
@@ -16,8 +15,8 @@ const (
 )
 
 type entry struct {
-	file  *os.File
-	ready chan struct{}
+	filepath string
+	ready    chan struct{}
 }
 
 type cacheManager struct {
@@ -50,15 +49,14 @@ func (cm *cacheManager) download(w http.ResponseWriter, req *http.Request) {
 
 		io.Copy(tmp, res.Body)
 
-		e.file = tmp
+		e.filepath = tmp.Name()
 		close(e.ready)
 	} else {
 		cm.mu.Unlock()
 		<-e.ready
 	}
 
-	b, _ := io.Copy(w, e.file)
-	log.Print(b, "written")
+	http.ServeFile(w, req, e.filepath)
 }
 
 func main() {
