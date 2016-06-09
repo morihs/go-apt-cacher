@@ -17,7 +17,6 @@ const (
 type entry struct {
 	filepath string
 	size     int64
-	hash     string
 	ready    chan struct{}
 }
 
