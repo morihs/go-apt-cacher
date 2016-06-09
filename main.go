@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/md5"
 	"flag"
 	"io"
 	"io/ioutil"
@@ -60,11 +59,6 @@ func (cm *cacheManager) download(w http.ResponseWriter, req *http.Request) {
 			panic("failed to stat a temp file")
 		}
 		e.size = stat.Size()
-
-		hasher := md5.New()
-		tmp.Seek(0, 0)
-		io.Copy(hasher, tmp)
-		e.hash = string(hasher.Sum(nil))
 
 		close(e.ready)
 	} else {
