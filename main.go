@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/md5"
 	"flag"
 	"io"
 	"io/ioutil"
@@ -16,6 +17,8 @@ const (
 
 type entry struct {
 	filepath string
+	size     int64
+	hash     string
 	ready    chan struct{}
 }
 
@@ -50,6 +53,19 @@ func (cm *cacheManager) download(w http.ResponseWriter, req *http.Request) {
 		io.Copy(tmp, res.Body)
 
 		e.filepath = tmp.Name()
+
+		stat, err := tmp.Stat()
+		if err != nil {
+			//TODO
+			panic("failed to stat a temp file")
+		}
+		e.size = stat.Size()
+
+		hasher := md5.New()
+		tmp.Seek(0, 0)
+		io.Copy(hasher, tmp)
+		e.hash = string(hasher.Sum(nil))
+
 		close(e.ready)
 	} else {
 		cm.mu.Unlock()
