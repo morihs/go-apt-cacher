@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 )
 
 const (
@@ -20,15 +21,19 @@ type entry struct {
 	ready    chan struct{}
 }
 
+type repo struct {
+	base    string
+	release []string
+}
+
 type cacheManager struct {
 	base  string
 	mu    sync.Mutex
 	cache map[string]*entry
 }
 
-func (cm *cacheManager) download(w http.ResponseWriter, req *http.Request) {
+func (cm *cacheManager) get(path string) *entry {
 	cm.mu.Lock()
-	path := req.URL.Path
 	e := cm.cache[path]
 	if e == nil {
 		e = &entry{ready: make(chan struct{})}
@@ -65,6 +70,11 @@ func (cm *cacheManager) download(w http.ResponseWriter, req *http.Request) {
 		<-e.ready
 	}
 
+	return e
+}
+
+func (cm *cacheManager) download(w http.ResponseWriter, req *http.Request) {
+	e := cm.get(req.URL.Path)
 	http.ServeFile(w, req, e.filepath)
 }
 
@@ -72,13 +82,18 @@ func main() {
 	flag.Parse()
 	args := flag.Args()
 
-	if len(args) != 1 {
+	if len(args) < 2 {
 		log.Fatal("Wrong number of arguments.")
 	}
 
+	//repo := &repo{base: args[0], release: args[1:]}
 	cm := cacheManager{base: args[0], cache: make(map[string]*entry)}
-
 	http.HandleFunc("/", cm.download)
+
+	timer := time.Tick(1 * time.Minute)
+	for range timer {
+		cm.get("dists/jessie/Release")
+	}
 
 	log.Fatal(http.ListenAndServe(defaultListen, nil))
 }
