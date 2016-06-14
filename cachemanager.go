@@ -1,13 +1,11 @@
-package main
+package aptcacher
 
 import (
-	"flag"
 	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"sync"
-	"time"
 )
 
 const (
@@ -15,34 +13,39 @@ const (
 	defaultListen  = "localhost:8000"
 )
 
-type entry struct {
+type Entry struct {
 	filepath string
 	size     int64
 	ready    chan struct{}
 }
 
-type repo struct {
+type Repo struct {
 	base    string
 	release []string
 }
 
-type cacheManager struct {
+type CacheManager struct {
 	base  string
 	mu    sync.Mutex
-	cache map[string]*entry
+	cache map[string]*Entry
 }
 
-func (cm *cacheManager) get(path string) *entry {
+func New(base string) *CacheManager {
+	return &CacheManager{base: base, cache: make(map[string]*Entry)}
+}
+
+func (cm *CacheManager) Cache(path string) *Entry {
 	cm.mu.Lock()
 	e := cm.cache[path]
 	if e == nil {
-		e = &entry{ready: make(chan struct{})}
+		e = &Entry{ready: make(chan struct{})}
 		cm.cache[path] = e
 		cm.mu.Unlock()
 
 		res, err := http.Get(cm.base + path)
 		if err != nil {
 			//TODO
+			log.Fatal(err)
 			panic("failed to get")
 		}
 		defer res.Body.Close()
@@ -73,27 +76,7 @@ func (cm *cacheManager) get(path string) *entry {
 	return e
 }
 
-func (cm *cacheManager) download(w http.ResponseWriter, req *http.Request) {
-	e := cm.get(req.URL.Path)
+func (cm *CacheManager) Serve(w http.ResponseWriter, req *http.Request) {
+	e := cm.Cache(req.URL.Path)
 	http.ServeFile(w, req, e.filepath)
-}
-
-func main() {
-	flag.Parse()
-	args := flag.Args()
-
-	if len(args) < 2 {
-		log.Fatal("Wrong number of arguments.")
-	}
-
-	//repo := &repo{base: args[0], release: args[1:]}
-	cm := cacheManager{base: args[0], cache: make(map[string]*entry)}
-	http.HandleFunc("/", cm.download)
-
-	timer := time.Tick(1 * time.Minute)
-	for range timer {
-		cm.get("dists/jessie/Release")
-	}
-
-	log.Fatal(http.ListenAndServe(defaultListen, nil))
 }
