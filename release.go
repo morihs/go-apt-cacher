@@ -16,7 +16,7 @@ var defaultHashAlgorithms = []string{
 
 type Indices map[string]string
 
-func splitField(line string) (string, string, error) {
+func parseField(line string) (string, string, error) {
 
 	if b := line[0]; b == ' ' || b == '\t' {
 		return "", strings.TrimRight(line[1:], " \t"), nil
@@ -37,7 +37,7 @@ func ParseRelease(r io.Reader) (map[string]([]string), error) {
 	var currentFieldName string
 	for scanner.Scan() {
 		line := scanner.Text()
-		name, value, err := splitField(line)
+		name, value, err := parseField(line)
 
 		if err != nil {
 			return nil, err
@@ -58,7 +58,7 @@ func ParseRelease(r io.Reader) (map[string]([]string), error) {
 	return release, nil
 }
 
-func ParseIndex(line string) (string, string, error) {
+func parseIndex(line string) (string, string, error) {
 	// line should look like this:
 	//                           (Hash)           (Size)                     (Path)
 	// ead1cbf42ed119c50bf3aab28b5b6351          8234934 main/binary-amd64/Packages
@@ -90,7 +90,7 @@ func NewIndices(release *map[string]([]string)) (*Indices, error) {
 	}
 
 	for _, line := range indicesString {
-		path, hash, err := ParseIndex(line)
+		path, hash, err := parseIndex(line)
 		if err != nil {
 			return nil, err
 		}
