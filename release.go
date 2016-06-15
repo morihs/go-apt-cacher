@@ -54,12 +54,12 @@ func GetIndices(r io.Reader) (Indices, error) {
 	}
 
 	for _, line := range indicesString {
-		path, hash, err := parseIndex(line)
+		remotePath, hash, err := parseIndex(line)
 		if err != nil {
 			return nil, err
 		}
 
-		indices[path] = hash
+		indices[remotePath] = hash
 	}
 
 	return indices, nil
@@ -68,14 +68,14 @@ func GetIndices(r io.Reader) (Indices, error) {
 func (oldIndices Indices) Update(newIndices Indices) []string {
 	updated := make([]string, 0)
 
-	for path, newHash := range newIndices {
-		oldHash, ok := oldIndices[path]
+	for remotePath, newHash := range newIndices {
+		oldHash, ok := oldIndices[remotePath]
 		if !ok {
 			continue
 		}
 		if newHash != oldHash {
-			updated = append(updated, path)
-			oldIndices[path] = newHash
+			updated = append(updated, remotePath)
+			oldIndices[remotePath] = newHash
 		}
 	}
 

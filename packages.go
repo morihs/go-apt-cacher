@@ -32,9 +32,26 @@ func GetPackageIndex(r io.Reader) (PackageIndex, error) {
 		}
 
 		hash := getHash(pkg)
-		if path, ok := pkg["Filename"]; ok && len(path) == 1 {
-			pkgIndex[path[0]] = hash
+		if remotePath, ok := pkg["Filename"]; ok && len(remotePath) == 1 {
+			pkgIndex[remotePath[0]] = hash
 		}
 	}
 	return pkgIndex, nil
+}
+
+func (oldPkgIndex PackageIndex) Update(newPkgIndex PackageIndex) []string {
+	updated := make([]string, 0)
+
+	for remotePath, newHash := range newPkgIndex {
+		oldHash, ok := oldPkgIndex[remotePath]
+		if !ok {
+			continue
+		}
+		if newHash != oldHash {
+			updated = append(updated, remotePath)
+			oldPkgIndex[remotePath] = newHash
+		}
+	}
+
+	return updated
 }
