@@ -1,7 +1,6 @@
 package aptcacher
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"strings"
@@ -15,48 +14,6 @@ var defaultHashAlgorithms = []string{
 }
 
 type Indices map[string]string
-
-func parseField(line string) (string, string, error) {
-
-	if b := line[0]; b == ' ' || b == '\t' {
-		return "", strings.TrimRight(line[1:], " \t"), nil
-	}
-
-	split := strings.SplitN(line, ":", 2)
-	if len(split) < 2 {
-		return "", "", fmt.Errorf("Failed to parse this line: %s", line)
-	}
-
-	return strings.Trim(split[0], " \t"), strings.Trim(split[1], " \t"), nil
-}
-
-func ParseRelease(r io.Reader) (map[string]([]string), error) {
-	release := make(map[string]([]string))
-	scanner := bufio.NewScanner(r)
-
-	var currentFieldName string
-	for scanner.Scan() {
-		line := scanner.Text()
-		name, value, err := parseField(line)
-
-		if err != nil {
-			return nil, err
-		}
-
-		if len(name) > 0 {
-			currentFieldName = name
-		} else if len(currentFieldName) == 0 {
-			err = fmt.Errorf("No field name found in this line or the previous lines: %s", line)
-			return nil, err
-		}
-
-		if len(value) > 0 {
-			release[currentFieldName] = append(release[currentFieldName], value)
-		}
-	}
-
-	return release, nil
-}
 
 func parseIndex(line string) (string, string, error) {
 	// line should look like this:
@@ -73,7 +30,12 @@ func parseIndex(line string) (string, string, error) {
 	return fields[2], fields[0], nil
 }
 
-func NewIndices(release *map[string]([]string)) (*Indices, error) {
+func GetIndices(r io.Reader) (*Indices, error) {
+	release, err := parseDCF(r)
+	if err != nil {
+		return nil, err
+	}
+
 	indices := &Indices{}
 
 	var indicesString []string
@@ -101,6 +63,19 @@ func NewIndices(release *map[string]([]string)) (*Indices, error) {
 	return indices, nil
 }
 
-func (indeces *Indices) Update(release *map[string]([]string)) {
+func (oldIndices *Indices) Update(newIndices *Indices) *[]string {
+	updated := make([]string, 0)
 
+	for path, newHash := range *newIndices {
+		oldHash, ok := (*oldIndices)[path]
+		if !ok {
+			continue
+		}
+		if newHash != oldHash {
+			updated = append(updated, path)
+			(*oldIndices)[path] = newHash
+		}
+	}
+
+	return &updated
 }
