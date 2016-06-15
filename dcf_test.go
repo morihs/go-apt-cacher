@@ -1,9 +1,6 @@
 package aptcacher
 
-import (
-	"strings"
-	"testing"
-)
+import "testing"
 
 func TestSplitSingleLineField(t *testing.T) {
 	key, value, _ := parseDCFField("Origin: Ubuntu")
@@ -27,7 +24,7 @@ func TestSplitContinuationLineField(t *testing.T) {
 }
 
 func TestParseDCF(t *testing.T) {
-	str := `Origin: Ubuntu
+	dcf := `Origin: Ubuntu
 Label: Ubuntu
 Suite: trusty
 Version: 14.04
@@ -44,9 +41,8 @@ MD5Sum:
 		"52d605b4217be64f461751f233dd9a8f               96 main/binary-amd64/Release",
 	}
 
-	reader := strings.NewReader(str)
-	release, _ := parseDCF(reader)
-	if (*release)["Label"][0] != "Ubuntu" || len((*release)["MD5Sum"]) != len(md5sums) || (*release)["MD5Sum"][0] != md5sums[0] || (*release)["MD5Sum"][1] != md5sums[1] {
+	release, _ := parseDCF(dcf)
+	if release["Label"][0] != "Ubuntu" || len(release["MD5Sum"]) != len(md5sums) || release["MD5Sum"][0] != md5sums[0] || release["MD5Sum"][1] != md5sums[1] {
 		t.Error(release)
 	}
 }

@@ -3,6 +3,7 @@ package aptcacher
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 	"strings"
 )
 
@@ -30,17 +31,18 @@ func parseIndex(line string) (string, string, error) {
 	return fields[2], fields[0], nil
 }
 
-func GetIndices(r io.Reader) (*Indices, error) {
-	release, err := parseDCF(r)
+func GetIndices(r io.Reader) (Indices, error) {
+	s, err := ioutil.ReadAll(r)
+	release, err := parseDCF(string(s))
 	if err != nil {
 		return nil, err
 	}
 
-	indices := &Indices{}
+	indices := Indices{}
 
 	var indicesString []string
 	for _, algo := range defaultHashAlgorithms {
-		str, ok := (*release)[algo]
+		str, ok := release[algo]
 		if ok {
 			indicesString = str
 			break
@@ -57,25 +59,25 @@ func GetIndices(r io.Reader) (*Indices, error) {
 			return nil, err
 		}
 
-		(*indices)[path] = hash
+		indices[path] = hash
 	}
 
 	return indices, nil
 }
 
-func (oldIndices *Indices) Update(newIndices *Indices) *[]string {
+func (oldIndices Indices) Update(newIndices Indices) []string {
 	updated := make([]string, 0)
 
-	for path, newHash := range *newIndices {
-		oldHash, ok := (*oldIndices)[path]
+	for path, newHash := range newIndices {
+		oldHash, ok := oldIndices[path]
 		if !ok {
 			continue
 		}
 		if newHash != oldHash {
 			updated = append(updated, path)
-			(*oldIndices)[path] = newHash
+			oldIndices[path] = newHash
 		}
 	}
 
-	return &updated
+	return updated
 }

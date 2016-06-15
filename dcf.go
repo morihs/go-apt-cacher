@@ -1,9 +1,7 @@
 package aptcacher
 
 import (
-	"bufio"
 	"fmt"
-	"io"
 	"strings"
 )
 
@@ -21,14 +19,11 @@ func parseDCFField(line string) (string, string, error) {
 	return strings.Trim(split[0], " \t"), strings.Trim(split[1], " \t"), nil
 }
 
-func parseDCF(r io.Reader) (*map[string]([]string), error) {
-	release := make(map[string]([]string))
-	scanner := bufio.NewScanner(r)
+func parseDCF(dcf string) (map[string][]string, error) {
+	release := make(map[string][]string)
 
 	var currentFieldName string
-	for scanner.Scan() {
-		line := scanner.Text()
-
+	for _, line := range strings.Split(dcf, "\n") {
 		// abort reading if the line is blank
 		if line == "" {
 			break
@@ -52,5 +47,5 @@ func parseDCF(r io.Reader) (*map[string]([]string), error) {
 		}
 	}
 
-	return &release, nil
+	return release, nil
 }
