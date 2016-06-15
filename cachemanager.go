@@ -1,6 +1,7 @@
 package aptcacher
 
 import (
+	"compress/gzip"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -114,7 +115,9 @@ func isPackages(remotePath string) bool {
 
 func (cm *CacheManager) UpdatePackageIndex(remotePath string) {
 	r, _ := os.Open(remotePath)
-	pkgIndex, err := GetPackageIndex(r)
+	//wrap with gzip.Reader to parse Packages.gz
+	gr, _ := gzip.NewReader(r)
+	pkgIndex, err := GetPackageIndex(gr)
 	if err != nil {
 		return
 	}
