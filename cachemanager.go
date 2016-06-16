@@ -17,7 +17,6 @@ const (
 
 type Entry struct {
 	localPath string
-	size      int64
 	ready     chan struct{}
 }
 
@@ -27,7 +26,8 @@ type Repo struct {
 }
 
 type CacheManager struct {
-	base     string
+	base string
+
 	mu       sync.Mutex
 	cache    map[string]*Entry
 	indices  Indices
@@ -45,10 +45,13 @@ func New(base string) *CacheManager {
 
 func (cm *CacheManager) Cache(remotePath string) *Entry {
 	cm.mu.Lock()
-	e := cm.cache[remotePath]
-	if e == nil {
-		e = &Entry{ready: make(chan struct{})}
-		cm.cache[remotePath] = e
+	defer cm.mu.Unlock()
+	// https://blog.golang.org/context
+
+	entry, ok := cm.cache[remotePath]
+	if !ok {
+		entry = &Entry{ready: make(chan struct{})}
+		cm.cache[remotePath] = entry
 		cm.mu.Unlock()
 
 		res, err := http.Get(cm.base + remotePath)
@@ -67,7 +70,7 @@ func (cm *CacheManager) Cache(remotePath string) *Entry {
 		io.Copy(tmp, res.Body)
 
 		localPath := tmp.Name()
-		e.localPath = localPath
+		entry.localPath = localPath
 
 		if isRelease(remotePath) {
 			go cm.UpdateIndices(localPath)
@@ -80,15 +83,15 @@ func (cm *CacheManager) Cache(remotePath string) *Entry {
 			//TODO
 			panic("failed to stat a temp file")
 		}
-		e.size = stat.Size()
+		entry.size = stat.Size()
 
 		close(e.ready)
 	} else {
 		cm.mu.Unlock()
-		<-e.ready
+		<-entry.ready
 	}
 
-	return e
+	return entry
 }
 
 func isRelease(remotePath string) bool {
@@ -131,8 +134,9 @@ func (cm *CacheManager) UpdatePackageIndex(remotePath string) {
 func (cm *CacheManager) Invalidate(remotePath string) {
 	//TODO
 	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
 	delete(cm.cache, remotePath)
-	cm.mu.Unlock()
 }
 
 func (cm *CacheManager) Serve(w http.ResponseWriter, req *http.Request) {

@@ -2,7 +2,20 @@ package aptcacher
 
 import "testing"
 
+type kv struct {
+	key   string
+	value string
+}
+
+var (
+	testMatrix = map[string]kv{
+		"Origin: Ubuntu": {"Origin", "Ubuntu"},
+		"MD5Sum:":        {"Md5Sum", ""},
+	}
+)
+
 func TestSplitSingleLineField(t *testing.T) {
+	t.Parallel()
 	key, value, _ := parseDCFField("Origin: Ubuntu")
 	if key != "Origin" || value != "Ubuntu" {
 		t.Error(`Failed to split a single line field`)
@@ -10,6 +23,7 @@ func TestSplitSingleLineField(t *testing.T) {
 }
 
 func TestSplitMultipleLineField(t *testing.T) {
+	t.Parallel()
 	key, value, _ := parseDCFField("MD5Sum:")
 	if key != "MD5Sum" || value != "" {
 		t.Error(`Failed to split a multiple line field`)
@@ -17,6 +31,7 @@ func TestSplitMultipleLineField(t *testing.T) {
 }
 
 func TestSplitContinuationLineField(t *testing.T) {
+	t.Parallel()
 	key, value, _ := parseDCFField(" test")
 	if key != "" || value != "test" {
 		t.Error(`Failed to split a continuation line field`)
@@ -24,6 +39,7 @@ func TestSplitContinuationLineField(t *testing.T) {
 }
 
 func TestParseDCF(t *testing.T) {
+	t.Parallel()
 	dcf := `Origin: Ubuntu
 Label: Ubuntu
 Suite: trusty
