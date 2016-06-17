@@ -33,47 +33,47 @@ func parseIndex(line string) (string, string, error) {
 
 func GetReleaseHashMap(r io.Reader) (ReleaseHashMap, error) {
 	s, err := ioutil.ReadAll(r)
-	dcfMap, err := parseDCF(string(s))
+	release, err := parseDCF(string(s))
 	if err != nil {
 		return nil, err
 	}
 
-	var releaseString []string
+	var relHash []string
 	for _, algo := range defaultHashAlgorithms {
-		str, ok := release[algo]
-		if ok {
-			releaseString = str
+		if str, ok := release[algo]; ok {
+			relHash = str
 			break
 		}
 	}
 
-	if releaseString == nil {
+	if relHash == nil {
 		return nil, fmt.Errorf("No hash field found.")
 	}
 
-	for _, line := range releaseString {
+	relHashMap := make(ReleaseHashMap)
+	for _, line := range relHash {
 		remotePath, hash, err := parseIndex(line)
 		if err != nil {
 			return nil, err
 		}
 
-		release[remotePath] = hash
+		relHashMap[remotePath] = hash
 	}
 
-	return release, nil
+	return relHashMap, nil
 }
 
-func (oldHashMap ReleaseHashMap) Update(newHashMap ReleaseHashMap) []string {
+func (oldRelHashMap ReleaseHashMap) Update(newRelHashMap ReleaseHashMap) []string {
 	updated := make([]string, 0)
 
-	for remotePath, newHash := range newHashMap {
-		oldHash, ok := oldHashMap[remotePath]
+	for remotePath, newHash := range newRelHashMap {
+		oldHash, ok := oldRelHashMap[remotePath]
 		if !ok {
 			continue
 		}
 		if newHash != oldHash {
 			updated = append(updated, remotePath)
-			oldHashMap[remotePath] = newHash
+			oldRelHashMap[remotePath] = newHash
 		}
 	}
 

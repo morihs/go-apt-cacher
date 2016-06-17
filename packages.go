@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-type PackageIndex map[string]string
+type PackagesHashMap map[string]string
 
 func getHash(pkg map[string][]string) string {
 	for _, algo := range defaultHashAlgorithms {
@@ -17,14 +17,14 @@ func getHash(pkg map[string][]string) string {
 	return ""
 }
 
-func GetPackageIndex(r io.Reader) (PackageIndex, error) {
-	lines, err := ioutil.ReadAll(r)
+func GetPackagesHashMap(r io.Reader) (PackagesHashMap, error) {
+	packages, err := ioutil.ReadAll(r)
 	if err != nil {
 		return nil, err
 	}
 
-	pkgIndex := make(PackageIndex)
-	chunks := strings.Split(string(lines), "\n\n")
+	pkgHashMap := make(PackagesHashMap)
+	chunks := strings.Split(string(packages), "\n\n")
 	for _, chunk := range chunks {
 		pkg, err := parseDCF(chunk)
 		if err != nil || len(pkg) == 0 {
@@ -33,23 +33,23 @@ func GetPackageIndex(r io.Reader) (PackageIndex, error) {
 
 		hash := getHash(pkg)
 		if remotePath, ok := pkg["Filename"]; ok && len(remotePath) == 1 {
-			pkgIndex[remotePath[0]] = hash
+			pkgHashMap[remotePath[0]] = hash
 		}
 	}
-	return pkgIndex, nil
+	return pkgHashMap, nil
 }
 
-func (oldPkgIndex PackageIndex) Update(newPkgIndex PackageIndex) []string {
+func (oldPkgHashMap PackagesHashMap) Update(newPkgHashMap PackagesHashMap) []string {
 	updated := make([]string, 0)
 
-	for remotePath, newHash := range newPkgIndex {
-		oldHash, ok := oldPkgIndex[remotePath]
+	for remotePath, newHash := range newPkgHashMap {
+		oldHash, ok := oldPkgHashMap[remotePath]
 		if !ok {
 			continue
 		}
 		if newHash != oldHash {
 			updated = append(updated, remotePath)
-			oldPkgIndex[remotePath] = newHash
+			oldPkgHashMap[remotePath] = newHash
 		}
 	}
 
