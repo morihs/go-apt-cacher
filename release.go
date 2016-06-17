@@ -14,7 +14,7 @@ var defaultHashAlgorithms = []string{
 	"SHA512",
 }
 
-type Indices map[string]string
+type ReleaseHashMap map[string]string
 
 func parseIndex(line string) (string, string, error) {
 	// line should look like this:
@@ -31,51 +31,49 @@ func parseIndex(line string) (string, string, error) {
 	return fields[2], fields[0], nil
 }
 
-func GetIndices(r io.Reader) (Indices, error) {
+func GetReleaseHashMap(r io.Reader) (ReleaseHashMap, error) {
 	s, err := ioutil.ReadAll(r)
-	release, err := parseDCF(string(s))
+	dcfMap, err := parseDCF(string(s))
 	if err != nil {
 		return nil, err
 	}
 
-	indices := Indices{}
-
-	var indicesString []string
+	var releaseString []string
 	for _, algo := range defaultHashAlgorithms {
 		str, ok := release[algo]
 		if ok {
-			indicesString = str
+			releaseString = str
 			break
 		}
 	}
 
-	if indicesString == nil {
+	if releaseString == nil {
 		return nil, fmt.Errorf("No hash field found.")
 	}
 
-	for _, line := range indicesString {
+	for _, line := range releaseString {
 		remotePath, hash, err := parseIndex(line)
 		if err != nil {
 			return nil, err
 		}
 
-		indices[remotePath] = hash
+		release[remotePath] = hash
 	}
 
-	return indices, nil
+	return release, nil
 }
 
-func (oldIndices Indices) Update(newIndices Indices) []string {
+func (oldHashMap ReleaseHashMap) Update(newHashMap ReleaseHashMap) []string {
 	updated := make([]string, 0)
 
-	for remotePath, newHash := range newIndices {
-		oldHash, ok := oldIndices[remotePath]
+	for remotePath, newHash := range newHashMap {
+		oldHash, ok := oldHashMap[remotePath]
 		if !ok {
 			continue
 		}
 		if newHash != oldHash {
 			updated = append(updated, remotePath)
-			oldIndices[remotePath] = newHash
+			oldHashMap[remotePath] = newHash
 		}
 	}
 

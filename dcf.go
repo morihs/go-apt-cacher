@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+type DCFMap map[string][]string
+
 func parseDCFField(line string) (string, string, error) {
 
 	if b := line[0]; b == ' ' || b == '\t' {
@@ -19,8 +21,8 @@ func parseDCFField(line string) (string, string, error) {
 	return strings.Trim(split[0], " \t"), strings.Trim(split[1], " \t"), nil
 }
 
-func parseDCF(dcf string) (map[string][]string, error) {
-	release := make(map[string][]string)
+func parseDCF(dcf string) (DCFMap, error) {
+	dcfMap := make(DCFMap)
 
 	var currentFieldName string
 	for _, line := range strings.Split(dcf, "\n") {
@@ -43,9 +45,9 @@ func parseDCF(dcf string) (map[string][]string, error) {
 		}
 
 		if len(value) > 0 {
-			release[currentFieldName] = append(release[currentFieldName], value)
+			dcfMap[currentFieldName] = append(dcfMap[currentFieldName], value)
 		}
 	}
 
-	return release, nil
+	return dcfMap, nil
 }
