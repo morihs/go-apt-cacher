@@ -308,7 +308,11 @@ func (cm *CacheManager) Delete(path string) error {
 		return err
 	}
 
-	delete(cm.cache, path)
+	cm.used -= e.size
 	heap.Remove(cm, e.index)
+	delete(cm.cache, path)
+	log.Info("deleted item", map[string]interface{}{
+		"_path": path,
+	})
 	return nil
 }
