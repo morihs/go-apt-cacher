@@ -3,8 +3,10 @@ package aptcacher
 import (
 	"bytes"
 	"crypto/md5"
+	"crypto/sha1"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -170,5 +172,66 @@ func TestCacheManagerLRU(t *testing.T) {
 	_, err = cm.Lookup(&FileInfo{path: "path/to/f"})
 	if err != nil {
 		t.Error(err)
+	}
+}
+
+func TestCacheManagerLoad(t *testing.T) {
+	t.Parallel()
+
+	files := map[string][]byte{
+		"a":    []byte{'a'},
+		"bc":   []byte{'b', 'c'},
+		"def":  []byte{'d', 'e', 'f'},
+		"ghij": []byte{'g', 'h', 'i', 'j'},
+	}
+
+	dir, err := ioutil.TempDir("", "gotest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	for k, v := range files {
+		err := ioutil.WriteFile(filepath.Join(dir, k), v, 0644)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	cm := NewCacheManager(dir, 0)
+	cm.Load()
+
+	f, err := cm.Lookup(&FileInfo{path: "a"})
+	if err != nil {
+		t.Error(err)
+	}
+	f.Close()
+	f, err = cm.Lookup(&FileInfo{path: "bc"})
+	if err != nil {
+		t.Error(err)
+	}
+	f.Close()
+	f, err = cm.Lookup(&FileInfo{path: "def"})
+	if err != nil {
+		t.Error(err)
+	}
+	f.Close()
+
+	sha1sum := sha1.Sum(files["ghij"])
+	f, err = cm.Lookup(&FileInfo{
+		path:    "ghij",
+		sha1sum: sha1sum[:],
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := ioutil.ReadAll(f)
+	f.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Compare(files["ghij"], data) != 0 {
+		t.Error(`bytes.Compare(files["ghij"], data) != 0`)
 	}
 }

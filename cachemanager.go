@@ -146,25 +146,13 @@ func (cm *CacheManager) Load() error {
 			return nil
 		}
 
-		data, err := readData(path)
-		if err != nil {
-			return err
-		}
-
 		size := uint64(info.Size())
-		md5sum := md5.Sum(data)
-		sha1sum := sha1.Sum(data)
-		sha256sum := sha256.Sum256(data)
 		e := &entry{
-			FileInfo: &FileInfo{
-				path:      subpath,
-				md5sum:    md5sum[:],
-				sha1sum:   sha1sum[:],
-				sha256sum: sha256sum[:],
-			},
-			size:  size,
-			atime: cm.lclock,
-			index: len(cm.lru),
+			// delay calculation of checksums.
+			FileInfo: &FileInfo{path: subpath},
+			size:     size,
+			atime:    cm.lclock,
+			index:    len(cm.lru),
 		}
 		cm.used += size
 		cm.lclock++
@@ -280,6 +268,20 @@ func (cm *CacheManager) Lookup(fi *FileInfo) (*os.File, error) {
 	e, ok := cm.cache[fi.path]
 	if !ok {
 		return nil, ErrNotFound
+	}
+
+	// delayed checksum calculation
+	if e.FileInfo.md5sum == nil {
+		data, err := readData(filepath.Join(cm.dir, e.Path()))
+		if err != nil {
+			return nil, err
+		}
+		md5sum := md5.Sum(data)
+		sha1sum := sha1.Sum(data)
+		sha256sum := sha256.Sum256(data)
+		e.FileInfo.md5sum = md5sum[:]
+		e.FileInfo.sha1sum = sha1sum[:]
+		e.FileInfo.sha256sum = sha256sum[:]
 	}
 
 	if !fi.Same(e.FileInfo) {
