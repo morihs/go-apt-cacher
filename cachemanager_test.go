@@ -21,7 +21,10 @@ func TestCacheManager(t *testing.T) {
 
 	cm := NewCacheManager(dir, 0)
 
-	err = cm.Insert([]byte{'a'}, "path/to/a")
+	err = cm.Insert([]byte{'a'}, &FileInfo{
+		path: "path/to/a",
+		size: 1,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +36,10 @@ func TestCacheManager(t *testing.T) {
 	}
 
 	// overwrite
-	err = cm.Insert([]byte{'a'}, "path/to/a")
+	err = cm.Insert([]byte{'a'}, &FileInfo{
+		path: "path/to/a",
+		size: 1,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +50,10 @@ func TestCacheManager(t *testing.T) {
 		t.Error(`cm.used != 1`)
 	}
 
-	err = cm.Insert([]byte{'b', 'c'}, "path/to/bc")
+	err = cm.Insert([]byte{'b', 'c'}, &FileInfo{
+		path: "path/to/bc",
+		size: 2,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,13 +67,14 @@ func TestCacheManager(t *testing.T) {
 	data := []byte{'d', 'a', 't', 'a'}
 	md5sum := md5.Sum(data)
 
-	err = cm.Insert(data, "data")
+	err = cm.Insert(data, MakeFileInfo("data", data))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	f, err := cm.Lookup(&FileInfo{
 		path:   "data",
+		size:   4,
 		md5sum: md5sum[:],
 	})
 	if err != nil {
@@ -82,6 +92,7 @@ func TestCacheManager(t *testing.T) {
 
 	_, err = cm.Lookup(&FileInfo{
 		path:   "data",
+		size:   4,
 		md5sum: []byte{},
 	})
 	if err != ErrNotFound {
@@ -111,11 +122,17 @@ func TestCacheManagerLRU(t *testing.T) {
 
 	cm := NewCacheManager(dir, 3)
 
-	err = cm.Insert([]byte{'a'}, "path/to/a")
+	err = cm.Insert([]byte{'a'}, &FileInfo{
+		path: "path/to/a",
+		size: 1,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = cm.Insert([]byte{'b', 'c'}, "path/to/bc")
+	err = cm.Insert([]byte{'b', 'c'}, &FileInfo{
+		path: "path/to/bc",
+		size: 2,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +141,10 @@ func TestCacheManagerLRU(t *testing.T) {
 	}
 
 	// a and bc will be purged
-	err = cm.Insert([]byte{'d', 'e'}, "path/to/de")
+	err = cm.Insert([]byte{'d', 'e'}, &FileInfo{
+		path: "path/to/de",
+		size: 2,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,41 +155,65 @@ func TestCacheManagerLRU(t *testing.T) {
 		t.Error(`cm.used != 2`)
 	}
 
-	_, err = cm.Lookup(&FileInfo{path: "path/to/a"})
+	_, err = cm.Lookup(&FileInfo{
+		path: "path/to/a",
+		size: 1,
+	})
 	if err != ErrNotFound {
 		t.Error(`err != ErrNotFound`)
 	}
-	_, err = cm.Lookup(&FileInfo{path: "path/to/bc"})
+	_, err = cm.Lookup(&FileInfo{
+		path: "path/to/bc",
+		size: 2,
+	})
 	if err != ErrNotFound {
 		t.Error(`err != ErrNotFound`)
 	}
 
-	err = cm.Insert([]byte{'a'}, "path/to/a")
+	err = cm.Insert([]byte{'a'}, &FileInfo{
+		path: "path/to/a",
+		size: 1,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// touch de
-	_, err = cm.Lookup(&FileInfo{path: "path/to/de"})
+	_, err = cm.Lookup(&FileInfo{
+		path: "path/to/de",
+		size: 2,
+	})
 	if err != nil {
 		t.Error(err)
 	}
 
 	// a will be purged
-	err = cm.Insert([]byte{'f'}, "path/to/f")
+	err = cm.Insert([]byte{'f'}, &FileInfo{
+		path: "path/to/f",
+		size: 1,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = cm.Lookup(&FileInfo{path: "path/to/a"})
+	_, err = cm.Lookup(&FileInfo{
+		path: "path/to/a",
+		size: 1,
+	})
 	if err != ErrNotFound {
 		t.Error(`err != ErrNotFound`)
 	}
-	_, err = cm.Lookup(&FileInfo{path: "path/to/de"})
+	_, err = cm.Lookup(&FileInfo{
+		path: "path/to/de",
+		size: 2,
+	})
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = cm.Lookup(&FileInfo{path: "path/to/f"})
+	_, err = cm.Lookup(&FileInfo{
+		path: "path/to/f",
+		size: 1,
+	})
 	if err != nil {
 		t.Error(err)
 	}
@@ -201,17 +245,31 @@ func TestCacheManagerLoad(t *testing.T) {
 	cm := NewCacheManager(dir, 0)
 	cm.Load()
 
-	f, err := cm.Lookup(&FileInfo{path: "a"})
+	l := cm.ListAll()
+	if len(l) != len(files) {
+		t.Error(`len(l) != len(files)`)
+	}
+
+	f, err := cm.Lookup(&FileInfo{
+		path: "a",
+		size: 1,
+	})
 	if err != nil {
 		t.Error(err)
 	}
 	f.Close()
-	f, err = cm.Lookup(&FileInfo{path: "bc"})
+	f, err = cm.Lookup(&FileInfo{
+		path: "bc",
+		size: 2,
+	})
 	if err != nil {
 		t.Error(err)
 	}
 	f.Close()
-	f, err = cm.Lookup(&FileInfo{path: "def"})
+	f, err = cm.Lookup(&FileInfo{
+		path: "def",
+		size: 3,
+	})
 	if err != nil {
 		t.Error(err)
 	}
@@ -220,6 +278,7 @@ func TestCacheManagerLoad(t *testing.T) {
 	sha1sum := sha1.Sum(files["ghij"])
 	f, err = cm.Lookup(&FileInfo{
 		path:    "ghij",
+		size:    4,
 		sha1sum: sha1sum[:],
 	})
 	if err != nil {
@@ -233,5 +292,49 @@ func TestCacheManagerLoad(t *testing.T) {
 	}
 	if bytes.Compare(files["ghij"], data) != 0 {
 		t.Error(`bytes.Compare(files["ghij"], data) != 0`)
+	}
+}
+
+func TestCacheManagerPathTraversal(t *testing.T) {
+	t.Parallel()
+
+	dir, err := ioutil.TempDir("", "gotest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	cm := NewCacheManager(dir, 0)
+
+	err = cm.Insert([]byte{'a'}, &FileInfo{
+		path: "/absolute/path",
+		size: 1,
+	})
+	if err != ErrBadPath {
+		t.Error(`/absolute/path must be a bad path`)
+	}
+
+	err = cm.Insert([]byte{'a'}, &FileInfo{
+		path: "./unclean/path",
+		size: 1,
+	})
+	if err != ErrBadPath {
+		t.Error(`./unclean/path must be a bad path`)
+	}
+
+	err = cm.Insert([]byte{'a'}, &FileInfo{
+		path: "",
+		size: 1,
+	})
+	if err != ErrBadPath {
+		t.Error(`empty path must be a bad path`)
+	}
+
+	err = cm.Insert([]byte{'a'}, &FileInfo{
+		path: ".",
+		size: 1,
+	})
+	if err != ErrBadPath {
+		t.Error(`. must be a bad path`)
 	}
 }

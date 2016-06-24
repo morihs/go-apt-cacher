@@ -1,6 +1,7 @@
 package aptcacher
 
 import (
+	"bytes"
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
@@ -21,6 +22,7 @@ func TestFileInfo(t *testing.T) {
 
 	fi := &FileInfo{
 		path:      "/data",
+		size:      uint64(len(data)),
 		md5sum:    md5sum[:],
 		sha1sum:   sha1sum[:],
 		sha256sum: sha256sum[:],
@@ -32,6 +34,7 @@ func TestFileInfo(t *testing.T) {
 
 	badpath := &FileInfo{
 		path: "bad",
+		size: uint64(len(data)),
 	}
 	if badpath.Same(fi) {
 		t.Error(`badpath.Same(fi)`)
@@ -39,13 +42,23 @@ func TestFileInfo(t *testing.T) {
 
 	pathonly := &FileInfo{
 		path: "/data",
+		size: uint64(len(data)),
 	}
 	if !pathonly.Same(fi) {
 		t.Error(`!pathonly.Same(fi)`)
 	}
 
+	sizemismatch := &FileInfo{
+		path: "/data",
+		size: 0,
+	}
+	if sizemismatch.Same(fi) {
+		t.Error(`sizemismatch.Same(fi)`)
+	}
+
 	md5mismatch := &FileInfo{
 		path:   "/data",
+		size:   uint64(len(data)),
 		md5sum: md5sum2[:],
 	}
 	if md5mismatch.Same(fi) {
@@ -54,6 +67,7 @@ func TestFileInfo(t *testing.T) {
 
 	md5match := &FileInfo{
 		path:   "/data",
+		size:   uint64(len(data)),
 		md5sum: md5sum[:],
 	}
 	if !md5match.Same(fi) {
@@ -62,6 +76,7 @@ func TestFileInfo(t *testing.T) {
 
 	sha1mismatch := &FileInfo{
 		path:    "/data",
+		size:    uint64(len(data)),
 		md5sum:  md5sum[:],
 		sha1sum: sha1sum2[:],
 	}
@@ -71,6 +86,7 @@ func TestFileInfo(t *testing.T) {
 
 	sha1match := &FileInfo{
 		path:    "/data",
+		size:    uint64(len(data)),
 		md5sum:  md5sum[:],
 		sha1sum: sha1sum[:],
 	}
@@ -80,6 +96,7 @@ func TestFileInfo(t *testing.T) {
 
 	sha1matchmd5mismatch := &FileInfo{
 		path:    "/data",
+		size:    uint64(len(data)),
 		md5sum:  md5sum2[:],
 		sha1sum: sha1sum[:],
 	}
@@ -89,11 +106,32 @@ func TestFileInfo(t *testing.T) {
 
 	allmatch := &FileInfo{
 		path:      "/data",
+		size:      uint64(len(data)),
 		md5sum:    md5sum[:],
 		sha1sum:   sha1sum[:],
 		sha256sum: sha256sum[:],
 	}
 	if !allmatch.Same(fi) {
 		t.Error(`!allmatch.Same(fi)`)
+	}
+}
+
+func TestMakeFileInfo(t *testing.T) {
+	t.Parallel()
+
+	path := "/abc/def"
+	data := []byte{'a', 'b', 'c', 'd', 'e', 'f'}
+
+	fi := MakeFileInfo(path, data)
+	if fi.Path() != path {
+		t.Error(`fi.Path() != path`)
+	}
+	if fi.Size() != uint64(len(data)) {
+		t.Error(`fi.Size() != uint64(len(data))`)
+	}
+
+	sha256sum := sha256.Sum256(data)
+	if bytes.Compare(sha256sum[:], fi.sha256sum) != 0 {
+		t.Error(`bytes.Compare(sha256sum[:], fi.sha256sum) != 0`)
 	}
 }

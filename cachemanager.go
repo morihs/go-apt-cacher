@@ -16,13 +16,15 @@ import (
 
 var (
 	// ErrNotFound is returned by CacheManager.Lookup for non-existing items.
-	ErrNotFound = errors.New("Not Found")
+	ErrNotFound = errors.New("not found")
+
+	// ErrBadPath is returned by CacheManager.Insert if path is bad
+	ErrBadPath = errors.New("bad path")
 )
 
 // entry represents an item in the cache.
 type entry struct {
 	*FileInfo
-	size uint64
 
 	// for container/heap.
 	// atime is used as priorities.
@@ -104,7 +106,7 @@ func (cm *CacheManager) maint() {
 	for cm.capacity > 0 && cm.used > cm.capacity {
 		e := heap.Pop(cm).(*entry)
 		delete(cm.cache, e.Path())
-		cm.used -= e.size
+		cm.used -= e.Size()
 		if err := os.Remove(filepath.Join(cm.dir, e.Path())); err != nil {
 			log.Error("CacheManager.maint", map[string]interface{}{
 				"_err": err.Error(),
@@ -149,10 +151,12 @@ func (cm *CacheManager) Load() error {
 		size := uint64(info.Size())
 		e := &entry{
 			// delay calculation of checksums.
-			FileInfo: &FileInfo{path: subpath},
-			size:     size,
-			atime:    cm.lclock,
-			index:    len(cm.lru),
+			FileInfo: &FileInfo{
+				path: subpath,
+				size: size,
+			},
+			atime: cm.lclock,
+			index: len(cm.lru),
 		}
 		cm.used += size
 		cm.lclock++
@@ -175,9 +179,17 @@ func (cm *CacheManager) Load() error {
 }
 
 // Insert inserts or updates a cache item.
-func (cm *CacheManager) Insert(data []byte, path string) error {
-	if len(path) == 0 {
-		return errors.New("CacheManager.Insert: zero-length path")
+//
+// fi.Path() must be as clean as filepath.Clean() and
+// must not be filepath.IsAbs().
+func (cm *CacheManager) Insert(data []byte, fi *FileInfo) error {
+	switch {
+	case fi.path != filepath.Clean(fi.path):
+		return ErrBadPath
+	case filepath.IsAbs(fi.path):
+		return ErrBadPath
+	case fi.path == ".":
+		return ErrBadPath
 	}
 
 	f, err := ioutil.TempFile(cm.dir, "_tmp")
@@ -198,10 +210,8 @@ func (cm *CacheManager) Insert(data []byte, path string) error {
 		return errors.Wrap(err, "CacheManager.Insert")
 	}
 
-	md5sum := md5.Sum(data)
-	sha1sum := sha1.Sum(data)
-	sha256sum := sha256.Sum256(data)
-	destpath := filepath.Join(cm.dir, path)
+	p := fi.path
+	destpath := filepath.Join(cm.dir, p)
 	dirpath := filepath.Dir(destpath)
 
 	_, err = os.Stat(dirpath)
@@ -218,16 +228,16 @@ func (cm *CacheManager) Insert(data []byte, path string) error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
-	if existing, ok := cm.cache[path]; ok {
+	if existing, ok := cm.cache[p]; ok {
 		err = os.Remove(destpath)
 		if err != nil {
 			return errors.Wrap(err, "CacheManager.Insert")
 		}
-		cm.used -= existing.size
+		cm.used -= existing.Size()
 		heap.Remove(cm, existing.index)
-		delete(cm.cache, path)
+		delete(cm.cache, p)
 		log.Info("deleted existing item", map[string]interface{}{
-			"_path": path,
+			"_path": p,
 		})
 	}
 
@@ -236,24 +246,35 @@ func (cm *CacheManager) Insert(data []byte, path string) error {
 		return errors.Wrap(err, "CacheManager.Insert")
 	}
 
-	size := uint64(len(data))
 	e := &entry{
-		FileInfo: &FileInfo{
-			path:      path,
-			md5sum:    md5sum[:],
-			sha1sum:   sha1sum[:],
-			sha256sum: sha256sum[:],
-		},
-		size:  size,
-		atime: cm.lclock,
+		FileInfo: fi,
+		atime:    cm.lclock,
 	}
-	cm.used += size
+	cm.used += fi.size
 	cm.lclock++
 	heap.Push(cm, e)
-	cm.cache[path] = e
+	cm.cache[p] = e
 
 	cm.maint()
 
+	return nil
+}
+
+func calcChecksum(dir string, e *entry) error {
+	if e.FileInfo.md5sum != nil {
+		return nil
+	}
+
+	data, err := readData(filepath.Join(dir, e.Path()))
+	if err != nil {
+		return err
+	}
+	md5sum := md5.Sum(data)
+	sha1sum := sha1.Sum(data)
+	sha256sum := sha256.Sum256(data)
+	e.FileInfo.md5sum = md5sum[:]
+	e.FileInfo.sha1sum = sha1sum[:]
+	e.FileInfo.sha256sum = sha256sum[:]
 	return nil
 }
 
@@ -271,17 +292,9 @@ func (cm *CacheManager) Lookup(fi *FileInfo) (*os.File, error) {
 	}
 
 	// delayed checksum calculation
-	if e.FileInfo.md5sum == nil {
-		data, err := readData(filepath.Join(cm.dir, e.Path()))
-		if err != nil {
-			return nil, err
-		}
-		md5sum := md5.Sum(data)
-		sha1sum := sha1.Sum(data)
-		sha256sum := sha256.Sum256(data)
-		e.FileInfo.md5sum = md5sum[:]
-		e.FileInfo.sha1sum = sha1sum[:]
-		e.FileInfo.sha256sum = sha256sum[:]
+	err := calcChecksum(cm.dir, e)
+	if err != nil {
+		return nil, err
 	}
 
 	if !fi.Same(e.FileInfo) {
@@ -295,26 +308,38 @@ func (cm *CacheManager) Lookup(fi *FileInfo) (*os.File, error) {
 	return os.Open(filepath.Join(cm.dir, fi.path))
 }
 
-// Delete deletes an item from the cache.
-func (cm *CacheManager) Delete(path string) error {
+// ListAll returns a list of FileInfo for all cached items.
+func (cm *CacheManager) ListAll() []*FileInfo {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
-	e, ok := cm.cache[path]
+	l := make([]*FileInfo, cm.Len())
+	for i, e := range cm.lru {
+		l[i] = e.FileInfo
+	}
+	return l
+}
+
+// Delete deletes an item from the cache.
+func (cm *CacheManager) Delete(p string) error {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	e, ok := cm.cache[p]
 	if !ok {
 		return nil
 	}
 
-	err := os.Remove(filepath.Join(cm.dir, path))
+	err := os.Remove(filepath.Join(cm.dir, p))
 	if err != nil {
 		return err
 	}
 
 	cm.used -= e.size
 	heap.Remove(cm, e.index)
-	delete(cm.cache, path)
+	delete(cm.cache, p)
 	log.Info("deleted item", map[string]interface{}{
-		"_path": path,
+		"_path": p,
 	})
 	return nil
 }
