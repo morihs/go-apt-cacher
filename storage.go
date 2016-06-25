@@ -15,10 +15,10 @@ import (
 )
 
 var (
-	// ErrNotFound is returned by CacheManager.Lookup for non-existing items.
+	// ErrNotFound is returned by Storage.Lookup for non-existing items.
 	ErrNotFound = errors.New("not found")
 
-	// ErrBadPath is returned by CacheManager.Insert if path is bad
+	// ErrBadPath is returned by Storage.Insert if path is bad
 	ErrBadPath = errors.New("bad path")
 )
 
@@ -32,11 +32,11 @@ type entry struct {
 	index int
 }
 
-// CacheManager manages cache entries in APT repositories.
+// Storage stores cache items in local file system.
 //
-// Caches will be dropped in LRU fashion when the total size of items
-// exceeds the capacity.
-type CacheManager struct {
+// Cached items will be removed in LRU fashion when the total size of
+// items exceeds the capacity.
+type Storage struct {
 	dir      string // directory for cache items
 	capacity uint64
 
@@ -47,16 +47,16 @@ type CacheManager struct {
 	lclock uint64   // ditto
 }
 
-// NewCacheManager creates a CacheManager.
+// NewStorage creates a Storage.
 //
 // dir is the directory for cached items.
 // capacity is the maximum total size (bytes) of items in the cache.
 // If capacity is zero, items will not be evicted.
-func NewCacheManager(dir string, capacity uint64) *CacheManager {
+func NewStorage(dir string, capacity uint64) *Storage {
 	if !filepath.IsAbs(dir) {
 		panic("dir must be an absolute path")
 	}
-	return &CacheManager{
+	return &Storage{
 		dir:      dir,
 		cache:    make(map[string]*entry),
 		capacity: capacity,
@@ -64,27 +64,27 @@ func NewCacheManager(dir string, capacity uint64) *CacheManager {
 }
 
 // Len implements heap.Interface.
-func (cm *CacheManager) Len() int {
+func (cm *Storage) Len() int {
 	return len(cm.lru)
 }
 
 // Less implements heap.Interface.
-func (cm *CacheManager) Less(i, j int) bool {
+func (cm *Storage) Less(i, j int) bool {
 	return cm.lru[i].atime < cm.lru[j].atime
 }
 
 // Swap implements heap.Interface.
-func (cm *CacheManager) Swap(i, j int) {
+func (cm *Storage) Swap(i, j int) {
 	cm.lru[i], cm.lru[j] = cm.lru[j], cm.lru[i]
 	cm.lru[i].index = i
 	cm.lru[j].index = j
 }
 
 // Push implements heap.Interface.
-func (cm *CacheManager) Push(x interface{}) {
+func (cm *Storage) Push(x interface{}) {
 	e, ok := x.(*entry)
 	if !ok {
-		panic("CacheManager.Push: wrong type")
+		panic("Storage.Push: wrong type")
 	}
 	n := len(cm.lru)
 	e.index = n
@@ -92,7 +92,7 @@ func (cm *CacheManager) Push(x interface{}) {
 }
 
 // Pop implements heap.Interface.
-func (cm *CacheManager) Pop() interface{} {
+func (cm *Storage) Pop() interface{} {
 	n := len(cm.lru)
 	e := cm.lru[n-1]
 	e.index = -1 // for safety
@@ -102,17 +102,17 @@ func (cm *CacheManager) Pop() interface{} {
 
 // maint removes unused items from cache until used < capacity.
 // cm.mu lock must be acquired beforehand.
-func (cm *CacheManager) maint() {
+func (cm *Storage) maint() {
 	for cm.capacity > 0 && cm.used > cm.capacity {
 		e := heap.Pop(cm).(*entry)
 		delete(cm.cache, e.Path())
 		cm.used -= e.Size()
 		if err := os.Remove(filepath.Join(cm.dir, e.Path())); err != nil {
-			log.Warn("CacheManager.maint", map[string]interface{}{
+			log.Warn("Storage.maint", map[string]interface{}{
 				"_err": err.Error(),
 			})
 		}
-		log.Info("CacheManager.maint removed", map[string]interface{}{
+		log.Info("Storage.maint removed", map[string]interface{}{
 			"_path": e.Path(),
 		})
 	}
@@ -129,7 +129,7 @@ func readData(path string) ([]byte, error) {
 }
 
 // Load loads existing items in filesystem.
-func (cm *CacheManager) Load() error {
+func (cm *Storage) Load() error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
@@ -162,7 +162,7 @@ func (cm *CacheManager) Load() error {
 		cm.lclock++
 		cm.lru = append(cm.lru, e)
 		cm.cache[subpath] = e
-		log.Debug("CacheManager.Load", map[string]interface{}{
+		log.Debug("Storage.Load", map[string]interface{}{
 			"_path": subpath,
 		})
 		return nil
@@ -182,7 +182,7 @@ func (cm *CacheManager) Load() error {
 //
 // fi.Path() must be as clean as filepath.Clean() and
 // must not be filepath.IsAbs().
-func (cm *CacheManager) Insert(data []byte, fi *FileInfo) error {
+func (cm *Storage) Insert(data []byte, fi *FileInfo) error {
 	switch {
 	case fi.path != filepath.Clean(fi.path):
 		return ErrBadPath
@@ -287,7 +287,7 @@ func calcChecksum(dir string, e *entry) error {
 // If no item matching fi is found, ErrNotFound is returned.
 //
 // The caller is responsible to close the retured os.File.
-func (cm *CacheManager) Lookup(fi *FileInfo) (*os.File, error) {
+func (cm *Storage) Lookup(fi *FileInfo) (*os.File, error) {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
@@ -314,7 +314,7 @@ func (cm *CacheManager) Lookup(fi *FileInfo) (*os.File, error) {
 }
 
 // ListAll returns a list of FileInfo for all cached items.
-func (cm *CacheManager) ListAll() []*FileInfo {
+func (cm *Storage) ListAll() []*FileInfo {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
@@ -326,7 +326,7 @@ func (cm *CacheManager) ListAll() []*FileInfo {
 }
 
 // Delete deletes an item from the cache.
-func (cm *CacheManager) Delete(p string) error {
+func (cm *Storage) Delete(p string) error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 

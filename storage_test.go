@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestCacheManager(t *testing.T) {
+func TestStorage(t *testing.T) {
 	t.Parallel()
 
 	dir, err := ioutil.TempDir("", "gotest")
@@ -19,7 +19,7 @@ func TestCacheManager(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	cm := NewCacheManager(dir, 0)
+	cm := NewStorage(dir, 0)
 
 	err = cm.Insert([]byte{'a'}, &FileInfo{
 		path: "path/to/a",
@@ -111,7 +111,7 @@ func TestCacheManager(t *testing.T) {
 	}
 }
 
-func TestCacheManagerLRU(t *testing.T) {
+func TestStorageLRU(t *testing.T) {
 	t.Parallel()
 
 	dir, err := ioutil.TempDir("", "gotest")
@@ -120,7 +120,7 @@ func TestCacheManagerLRU(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	cm := NewCacheManager(dir, 3)
+	cm := NewStorage(dir, 3)
 
 	err = cm.Insert([]byte{'a'}, &FileInfo{
 		path: "path/to/a",
@@ -219,7 +219,7 @@ func TestCacheManagerLRU(t *testing.T) {
 	}
 }
 
-func TestCacheManagerLoad(t *testing.T) {
+func TestStorageLoad(t *testing.T) {
 	t.Parallel()
 
 	files := map[string][]byte{
@@ -242,7 +242,7 @@ func TestCacheManagerLoad(t *testing.T) {
 		}
 	}
 
-	cm := NewCacheManager(dir, 0)
+	cm := NewStorage(dir, 0)
 	cm.Load()
 
 	l := cm.ListAll()
@@ -295,7 +295,7 @@ func TestCacheManagerLoad(t *testing.T) {
 	}
 }
 
-func TestCacheManagerPathTraversal(t *testing.T) {
+func TestStoragePathTraversal(t *testing.T) {
 	t.Parallel()
 
 	dir, err := ioutil.TempDir("", "gotest")
@@ -304,7 +304,7 @@ func TestCacheManagerPathTraversal(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	cm := NewCacheManager(dir, 0)
+	cm := NewStorage(dir, 0)
 
 	err = cm.Insert([]byte{'a'}, &FileInfo{
 		path: "/absolute/path",
