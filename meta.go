@@ -3,6 +3,8 @@ package aptcacher
 // This file provides utilities for debian repository indices.
 
 import (
+	"compress/bzip2"
+	"compress/gzip"
 	"encoding/hex"
 	"io"
 	"path"
@@ -65,11 +67,9 @@ func parseChecksum(l string) (p string, size uint64, csum []byte, err error) {
 	return
 }
 
-// GetFilesFromRelease parses Release or InRelease file and
+// getFilesFromRelease parses Release or InRelease file and
 // returns a list of *FileInfo pointed in the file.
-//
-// p is the local path.
-func GetFilesFromRelease(p string, r io.Reader) ([]*FileInfo, error) {
+func getFilesFromRelease(p string, r io.Reader) ([]*FileInfo, error) {
 	dir := path.Dir(p)
 
 	d, err := NewParser(r).Read()
@@ -149,11 +149,9 @@ func GetFilesFromRelease(p string, r io.Reader) ([]*FileInfo, error) {
 	return l, nil
 }
 
-// GetFilesFromPackages parses Packages file and returns
+// getFilesFromPackages parses Packages file and returns
 // a list of *FileInfo pointed in the file.
-//
-// p is the local path.
-func GetFilesFromPackages(p string, r io.Reader) ([]*FileInfo, error) {
+func getFilesFromPackages(p string, r io.Reader) ([]*FileInfo, error) {
 	prefix := strings.SplitN(p, "/", 2)[0]
 
 	var l []*FileInfo
@@ -214,11 +212,9 @@ func GetFilesFromPackages(p string, r io.Reader) ([]*FileInfo, error) {
 	return l, nil
 }
 
-// GetFilesFromSources parses Sources file and returns
+// getFilesFromSources parses Sources file and returns
 // a list of *FileInfo pointed in the file.
-//
-// p is the local path.
-func GetFilesFromSources(p string, r io.Reader) ([]*FileInfo, error) {
+func getFilesFromSources(p string, r io.Reader) ([]*FileInfo, error) {
 	prefix := strings.SplitN(p, "/", 2)[0]
 
 	var l []*FileInfo
@@ -294,10 +290,50 @@ func GetFilesFromSources(p string, r io.Reader) ([]*FileInfo, error) {
 	return l, nil
 }
 
-// GetFilesFromIndex parses i18n/Index file and returns
+// getFilesFromIndex parses i18n/Index file and returns
 // a list of *FileInfo pointed in the file.
+func getFilesFromIndex(p string, r io.Reader) ([]*FileInfo, error) {
+	return getFilesFromRelease(p, r)
+}
+
+// ExtractFileInfo parses debian repository index files such as
+// Release, Packages, or Sources and return a list of *FileInfo
+// listed in the file.
 //
 // p is the local path.
-func GetFilesFromIndex(p string, r io.Reader) ([]*FileInfo, error) {
-	return GetFilesFromRelease(p, r)
+func ExtractFileInfo(p string, r io.Reader) ([]*FileInfo, error) {
+	if !IsMeta(p) {
+		return nil, errors.New("not a meta data file: " + p)
+	}
+
+	base := path.Base(p)
+	ext := path.Ext(base)
+	switch ext {
+	case "", ".gpg":
+		// do nothing
+	case ".gz":
+		gz, err := gzip.NewReader(r)
+		if err != nil {
+			return nil, err
+		}
+		r = gz
+		base = base[:len(base)-3]
+	case ".bz2":
+		r = bzip2.NewReader(r)
+		base = base[:len(base)-4]
+	default:
+		return nil, errors.New("unsupported file extension: " + ext)
+	}
+
+	switch base {
+	case "Release", "InRelease":
+		return getFilesFromRelease(p, r)
+	case "Packages":
+		return getFilesFromPackages(p, r)
+	case "Sources":
+		return getFilesFromSources(p, r)
+	case "Index":
+		return getFilesFromIndex(p, r)
+	}
+	return nil, nil
 }

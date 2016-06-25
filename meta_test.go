@@ -1,7 +1,6 @@
 package aptcacher
 
 import (
-	"compress/gzip"
 	"encoding/hex"
 	"os"
 	"testing"
@@ -64,7 +63,7 @@ func TestGetFilesFromRelease(t *testing.T) {
 	}
 	defer f.Close()
 
-	fil, err := GetFilesFromRelease("ubuntu/dists/trusty/Release", f)
+	fil, err := ExtractFileInfo("ubuntu/dists/trusty/Release", f)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +109,7 @@ func TestGetFilesFromPackages(t *testing.T) {
 	}
 	defer f.Close()
 
-	fil, err := GetFilesFromPackages("ubuntu/dists/testing/main/binary-amd64/Packages", f)
+	fil, err := ExtractFileInfo("ubuntu/dists/testing/main/binary-amd64/Packages", f)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,12 +150,8 @@ func TestGetFilesFromSources(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer f.Close()
-	g, err := gzip.NewReader(f)
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	fil, err := GetFilesFromSources("ubuntu/dists/testing/main/source/Sources.gz", g)
+	fil, err := ExtractFileInfo("ubuntu/dists/testing/main/source/Sources.gz", f)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +225,7 @@ func TestGetFilesFromIndex(t *testing.T) {
 	}
 	defer f.Close()
 
-	fil, err := GetFilesFromIndex("ubuntu/dists/trusty/main/i18n/Index", f)
+	fil, err := ExtractFileInfo("ubuntu/dists/trusty/main/i18n/Index", f)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,5 +251,23 @@ func TestGetFilesFromIndex(t *testing.T) {
 	}
 	if !containsFileInfo(fi, fil) {
 		t.Error(`ubuntu/dists/trusty/main/i18n/Translation-zh_TW.bz2`)
+	}
+}
+
+func TestExtractFileInfo(t *testing.T) {
+	t.Parallel()
+
+	f, err := os.Open("t/Packages")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	fil, err := ExtractFileInfo("ubuntu/dists/testing/Release.gpg", f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fil) != 0 {
+		t.Error(`len(fil) != 0`)
 	}
 }
