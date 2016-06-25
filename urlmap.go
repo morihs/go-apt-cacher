@@ -11,7 +11,7 @@ import (
 var (
 	validPrefix = regexp.MustCompile(`^[a-z0-9._-]+$`)
 
-	// Error returned for invalid prefix.
+	// ErrInvalidPrefix returned for invalid prefix.
 	ErrInvalidPrefix = errors.New("invalid prefix")
 )
 

@@ -18,6 +18,9 @@ type FileInfo struct {
 
 // Same returns true if t has the same checksum values.
 func (fi *FileInfo) Same(t *FileInfo) bool {
+	if fi == t {
+		return true
+	}
 	if fi.path != t.path {
 		return false
 	}

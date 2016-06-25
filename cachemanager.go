@@ -47,7 +47,7 @@ type CacheManager struct {
 	lclock uint64   // ditto
 }
 
-// New creates a CacheManager.
+// NewCacheManager creates a CacheManager.
 //
 // dir is the directory for cached items.
 // capacity is the maximum total size (bytes) of items in the cache.
@@ -108,7 +108,7 @@ func (cm *CacheManager) maint() {
 		delete(cm.cache, e.Path())
 		cm.used -= e.Size()
 		if err := os.Remove(filepath.Join(cm.dir, e.Path())); err != nil {
-			log.Error("CacheManager.maint", map[string]interface{}{
+			log.Warn("CacheManager.maint", map[string]interface{}{
 				"_err": err.Error(),
 			})
 		}
@@ -194,7 +194,7 @@ func (cm *CacheManager) Insert(data []byte, fi *FileInfo) error {
 
 	f, err := ioutil.TempFile(cm.dir, "_tmp")
 	if err != nil {
-		return errors.Wrap(err, "CacheManager.Insert")
+		return err
 	}
 	defer func() {
 		f.Close()
@@ -203,11 +203,11 @@ func (cm *CacheManager) Insert(data []byte, fi *FileInfo) error {
 
 	_, err = f.Write(data)
 	if err != nil {
-		return errors.Wrap(err, "CacheManager.Insert")
+		return err
 	}
 	err = f.Sync()
 	if err != nil {
-		return errors.Wrap(err, "CacheManager.Insert")
+		return err
 	}
 
 	p := fi.path
@@ -219,10 +219,10 @@ func (cm *CacheManager) Insert(data []byte, fi *FileInfo) error {
 	case os.IsNotExist(err):
 		err = os.MkdirAll(dirpath, 0755)
 		if err != nil {
-			return errors.Wrap(err, "CacheManager.Insert")
+			return err
 		}
 	case err != nil:
-		return errors.Wrap(err, "CacheManager.Insert")
+		return err
 	}
 
 	cm.mu.Lock()
@@ -231,7 +231,12 @@ func (cm *CacheManager) Insert(data []byte, fi *FileInfo) error {
 	if existing, ok := cm.cache[p]; ok {
 		err = os.Remove(destpath)
 		if err != nil {
-			return errors.Wrap(err, "CacheManager.Insert")
+			if !os.IsNotExist(err) {
+				return err
+			}
+			log.Warn("cache file was removed already", map[string]interface{}{
+				"_path": p,
+			})
 		}
 		cm.used -= existing.Size()
 		heap.Remove(cm, existing.index)
@@ -243,7 +248,7 @@ func (cm *CacheManager) Insert(data []byte, fi *FileInfo) error {
 
 	err = os.Rename(f.Name(), destpath)
 	if err != nil {
-		return errors.Wrap(err, "CacheManager.Insert")
+		return err
 	}
 
 	e := &entry{
@@ -332,7 +337,12 @@ func (cm *CacheManager) Delete(p string) error {
 
 	err := os.Remove(filepath.Join(cm.dir, p))
 	if err != nil {
-		return err
+		if !os.IsNotExist(err) {
+			return err
+		}
+		log.Warn("cached file was already removed", map[string]interface{}{
+			"_path": p,
+		})
 	}
 
 	cm.used -= e.size
