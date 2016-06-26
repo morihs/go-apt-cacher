@@ -1,7 +1,9 @@
-[![Build Status](https://travis-ci.org/cybozu-go/go-apt-cacher.svg?branch=master)](https://travis-ci.org/cybozu-go/go-apt-cacher)
-
 go-apt-cacher is a caching reverse proxy built specifically for Debian (APT)
 repositories.
+
+[![Build Status](https://travis-ci.org/cybozu-go/go-apt-cacher.svg?branch=master)](https://travis-ci.org/cybozu-go/go-apt-cacher)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)][MIT]
+[![GoDoc](https://godoc.org/github.com/cybozu-go/go-apt-cacher?status.png)](https://godoc.org/github.com/cybozu-go/go-apt-cacher)
 
 Features
 --------
@@ -26,4 +28,6 @@ go get github.com/cybozu-go/go-apt-cacher/cmd/go-apt-cacher
 License
 -------
 
-[MIT](https://opensource.org/licenses/MIT)
+[MIT][]
+
+[MIT]: https://opensource.org/licenses/MIT

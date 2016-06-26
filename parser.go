@@ -1,12 +1,5 @@
 package aptcacher
 
-import (
-	"bufio"
-	"errors"
-	"io"
-	"strings"
-)
-
 // This file implements a generic debian control file parser.
 //
 // Specifications of files are:
@@ -16,6 +9,13 @@ import (
 // According to Debian policy 5.1, folded fields are used in few
 // fields such as Uploaders or Binary that we are not insterested in.
 // This parser treats them just the same as multiline fields.
+
+import (
+	"bufio"
+	"errors"
+	"io"
+	"strings"
+)
 
 // Paragraph is a mapping between field names and values.
 //

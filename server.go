@@ -8,7 +8,6 @@ import (
 
 	"github.com/cybozu-go/log"
 	"github.com/facebookgo/httpdown"
-	"github.com/gorilla/mux"
 	"golang.org/x/net/context"
 )
 
@@ -18,11 +17,11 @@ const (
 )
 
 // Serve runs REST API server until ctx.Done() is closed.
-func Serve(ctx context.Context, l net.Listener) error {
+func Serve(ctx context.Context, l net.Listener, c *Cacher) error {
 	hd := httpdown.HTTP{}
 	logger := _log.New(log.DefaultLogger().Writer(log.LvError), "[http]", 0)
 	s := &http.Server{
-		Handler:      mux.NewRouter(),
+		Handler:      cacheHandler{c},
 		ReadTimeout:  defaultReadTimeout,
 		WriteTimeout: defaultWriteTimeout,
 		ErrorLog:     logger,

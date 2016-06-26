@@ -1,5 +1,5 @@
-Design of go-apt-cacher
-=======================
+Design Notes
+============
 
 go-apt-cacher is a reverse HTTP proxy built specifically for Debian (APT)
 repositories.  This document describes its design and internals briefly.
@@ -36,8 +36,30 @@ total size of cached files exceeds the given capacity.
 Note that go-apt-cacher does _not_ reference cache-related HTTP headers
 such as "Last-Modified" or "Cache-Control" at all.
 
-As its nature, go-apt-cacher caches only GET responses.
-Responses for HEAD and other methods will never be cached.
+HTTP methods
+------------
+
+go-apt-cacher accepts only GET and HEAD methods.
+For other methods, it returns HTTP 501 Not Implemented response.
+
+Lock order
+----------
+
+Internally, go-apt-cacher have these locks.
+The lock listed first has higher order than locks listed under it.
+
+1. `Cacher.fiLock`
+
+    This lock is to protect file information cached in Cacher.
+
+2. `Cacher.dlLock`
+
+    This lock is to protect download channels and cached response statuses.
+    Strictly, this lock is used independently from other locks.
+
+3. `Storage.mu`
+
+    This lock is to protect internal data in Storage.
 
 Recovery
 --------
@@ -53,3 +75,6 @@ Compression support
 
 As Go does not provide the standard way to decompress .xz files,
 go-apt-cacher ignores requests for .xz and returns 404 Not Found response.
+
+Other optional compression algorithms such as .lzma or .lz are handled
+the same as .xz.

@@ -112,7 +112,7 @@ func (cm *Storage) maint() {
 				"_err": err.Error(),
 			})
 		}
-		log.Info("Storage.maint removed", map[string]interface{}{
+		log.Info("removed", map[string]interface{}{
 			"_path": e.Path(),
 		})
 	}

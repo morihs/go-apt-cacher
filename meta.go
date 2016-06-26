@@ -43,6 +43,16 @@ func IsMeta(p string) bool {
 	return false
 }
 
+// IsSupported returns true if the meta data is compressed that can be
+// decompressed by ExtractFileInfo.
+func IsSupported(p string) bool {
+	switch path.Ext(p) {
+	case "", ".gz", ".bz2", ".gpg":
+		return true
+	}
+	return false
+}
+
 func parseChecksum(l string) (p string, size uint64, csum []byte, err error) {
 	flds := strings.Fields(l)
 	if len(flds) != 3 {
@@ -316,6 +326,7 @@ func ExtractFileInfo(p string, r io.Reader) ([]*FileInfo, error) {
 		if err != nil {
 			return nil, err
 		}
+		defer gz.Close()
 		r = gz
 		base = base[:len(base)-3]
 	case ".bz2":
