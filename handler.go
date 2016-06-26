@@ -25,7 +25,7 @@ func (c cacheHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	accepted := time.Now()
-	p := r.URL.Path[1:]
+	p := path.Clean(r.URL.Path[1:])
 
 	if log.Enabled(log.LvDebug) {
 		log.Debug("request path", map[string]interface{}{
@@ -70,7 +70,7 @@ LOG:
 	log.Info("[http]", map[string]interface{}{
 		"_method":      r.Method,
 		"_elapsed":     took.String(),
-		"_path":        r.URL.Path,
+		"_path":        p,
 		"_status":      status,
 		"_remote_addr": r.RemoteAddr,
 	})
