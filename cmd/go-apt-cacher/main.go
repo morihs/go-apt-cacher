@@ -2,31 +2,66 @@ package main
 
 import (
 	"flag"
-	"net/http"
+	"fmt"
+	"net"
 	"os"
-	"time"
+	"os/signal"
+	"syscall"
 
+	"golang.org/x/net/context"
+
+	"github.com/BurntSushi/toml"
 	aptcacher "github.com/cybozu-go/go-apt-cacher"
 	"github.com/cybozu-go/log"
 )
 
+const (
+	defaultConfigPath = "/etc/go-apt-cacher.toml"
+	defaultAddress    = ":3142"
+)
+
+var (
+	configPath    = flag.String("f", defaultConfigPath, "configuration file name.")
+	listenAddress = flag.String("l", defaultAddress, "listen address.")
+)
+
 func main() {
 	flag.Parse()
-	args := flag.Args()
 
-	if len(args) < 1 {
-		log.Error("Usage: go-apt-cacher REPO")
+	var config aptcacher.CacherConfig
+	md, err := toml.DecodeFile(*configPath, &config)
+	if err != nil {
+		log.ErrorExit(err)
+	}
+	if len(md.Undecoded()) > 0 {
+		log.Error("invalid config keys", map[string]interface{}{
+			"_keys": fmt.Sprintf("%#v", md.Undecoded()),
+		})
 		os.Exit(1)
 	}
 
-	cm := aptcacher.New(args[0])
-	http.HandleFunc("/", cm.Serve)
-	go func() { log.Fatal(http.ListenAndServe(":3142", nil)) }()
+	ctx, cancel := context.WithCancel(context.Background())
+	cacher, err := aptcacher.NewCacher(ctx, &config)
+	if err != nil {
+		log.ErrorExit(err)
+	}
 
-	//http://qiita.com/ruiu/items/1ea0c72088ad8f2b841e
-	timer := time.Tick(3 * time.Second)
+	l, err := net.Listen("tcp", *listenAddress)
+	if err != nil {
+		log.ErrorExit(err)
+	}
 
-	for s := range timer {
-		// update Releases
+	done := make(chan error, 1)
+	go func() {
+		done <- aptcacher.Serve(ctx, l, cacher)
+	}()
+
+	sig := make(chan os.Signal, 10)
+	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+	<-sig
+	signal.Stop(sig)
+	cancel()
+	if err := <-done; err != nil {
+		log.Error(err.Error(), nil)
 	}
 }

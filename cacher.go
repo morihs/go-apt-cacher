@@ -5,12 +5,12 @@ package aptcacher
 
 import (
 	"bytes"
-	"flag"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -21,31 +21,19 @@ import (
 )
 
 const (
-	// DefaultCheckInterval is the default interval to check
-	// updates of Release/InRelease files.  Default is 15 seconds.
-	DefaultCheckInterval = 15
-
-	// DefaultCachePeriod is the default period to cache bad HTTP
-	// response statuses.  Default is 3 seconds.
-	DefaultCachePeriod = 3
-
+	gib            = 1 << 30
 	requestTimeout = 30 * time.Minute
-)
-
-var (
-	checkInterval = flag.Int("interval", DefaultCheckInterval,
-		"check interval for Release/InRelease")
-	cachePeriod = flag.Int("cacheperiod", DefaultCachePeriod,
-		"cache period for bad HTTP response statuses")
 )
 
 // Cacher downloads and caches APT indices and deb files.
 type Cacher struct {
-	meta   *Storage
-	items  *Storage
-	um     URLMap
-	ctx    context.Context
-	client *http.Client
+	meta          *Storage
+	items         *Storage
+	um            URLMap
+	checkInterval time.Duration
+	cachePeriod   time.Duration
+	ctx           context.Context
+	client        *http.Client
 
 	fiLock sync.RWMutex
 	info   map[string]*FileInfo
@@ -56,10 +44,39 @@ type Cacher struct {
 }
 
 // NewCacher constructs Cacher.
-//
-// meta is a pointer to Storage to store meta data files.
-// cache is a pointer to Storage to cache debs and other files.
-func NewCacher(ctx context.Context, meta, cache *Storage, um URLMap) (*Cacher, error) {
+func NewCacher(ctx context.Context, config *CacherConfig) (*Cacher, error) {
+	checkInterval := time.Duration(config.CheckInterval) * time.Second
+	if checkInterval == 0 {
+		checkInterval = defaultCheckInterval * time.Second
+	}
+
+	cachePeriod := time.Duration(config.CachePeriod) * time.Second
+	if cachePeriod == 0 {
+		cachePeriod = defaultCachePeriod * time.Second
+	}
+
+	metaDir := filepath.Clean(config.MetaDirectory)
+	if !filepath.IsAbs(metaDir) {
+		return nil, errors.New("meta_dir must be an absolute path")
+	}
+
+	cacheDir := filepath.Clean(config.CacheDirectory)
+	if !filepath.IsAbs(cacheDir) {
+		return nil, errors.New("cache_dir must be an absolute path")
+	}
+
+	if metaDir == cacheDir {
+		return nil, errors.New("meta_dir and cache_dir must be different")
+	}
+
+	capacity := uint64(config.CacheCapacity) * gib
+	if capacity == 0 {
+		capacity = defaultCacheCapacity * gib
+	}
+
+	meta := NewStorage(metaDir, 0)
+	cache := NewStorage(cacheDir, capacity)
+
 	if err := meta.Load(); err != nil {
 		return nil, errors.Wrap(err, "meta.Load")
 	}
@@ -67,14 +84,31 @@ func NewCacher(ctx context.Context, meta, cache *Storage, um URLMap) (*Cacher, e
 		return nil, errors.Wrap(err, "cache.Load")
 	}
 
+	um := make(URLMap)
+	for prefix, urlString := range config.Mapping {
+		u, err := url.Parse(urlString)
+		if err != nil {
+			return nil, errors.Wrap(err, prefix)
+		}
+		if u.Scheme != "http" && u.Scheme != "https" {
+			return nil, errors.New("unsupported scheme: " + u.Scheme)
+		}
+		err = um.Register(prefix, u)
+		if err != nil {
+			return nil, errors.Wrap(err, prefix)
+		}
+	}
+
 	c := &Cacher{
-		meta:       meta,
-		items:      cache,
-		um:         um,
-		ctx:        ctx,
-		client:     &http.Client{},
-		info:       make(map[string]*FileInfo),
-		dlChannels: make(map[string]chan struct{}),
+		meta:          meta,
+		items:         cache,
+		um:            um,
+		checkInterval: checkInterval,
+		cachePeriod:   cachePeriod,
+		ctx:           ctx,
+		client:        &http.Client{},
+		info:          make(map[string]*FileInfo),
+		dlChannels:    make(map[string]chan struct{}),
 	}
 
 	metas := meta.ListAll()
@@ -114,7 +148,7 @@ func (c *Cacher) maintMeta(p string) {
 }
 
 func (c *Cacher) maintRelease(p string, withGPG bool) {
-	ticker := time.NewTicker(time.Duration(*checkInterval) * time.Second)
+	ticker := time.NewTicker(c.checkInterval)
 	defer ticker.Stop()
 
 	if log.Enabled(log.LvDebug) {
@@ -186,7 +220,7 @@ func (c *Cacher) download(p string, u *url.URL, valid *FileInfo) {
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(time.Duration(*cachePeriod) * time.Second):
+			case <-time.After(c.cachePeriod):
 			}
 			c.dlLock.Lock()
 			delete(c.results, p)
