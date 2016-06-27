@@ -60,20 +60,16 @@ func parseChecksum(l string) (p string, size uint64, csum []byte, err error) {
 		return
 	}
 
-	n, err_ := strconv.ParseUint(flds[1], 10, 64)
-	if err_ != nil {
-		err = err_
+	size, err = strconv.ParseUint(flds[1], 10, 64)
+	if err != nil {
 		return
 	}
-	d, err_ := hex.DecodeString(flds[0])
-	if err_ != nil {
-		err = err_
+	csum, err = hex.DecodeString(flds[0])
+	if err != nil {
 		return
 	}
 
 	p = flds[2]
-	size = n
-	csum = d
 	return
 }
 
