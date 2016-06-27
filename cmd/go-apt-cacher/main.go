@@ -21,12 +21,18 @@ const (
 )
 
 var (
-	configPath    = flag.String("f", defaultConfigPath, "configuration file name.")
-	listenAddress = flag.String("l", defaultAddress, "listen address.")
+	configPath    = flag.String("f", defaultConfigPath, "configuration file name")
+	listenAddress = flag.String("s", defaultAddress, "listen address")
+	logLevel      = flag.String("l", "info", "log level [critical/error/warning/info/debug]")
 )
 
 func main() {
 	flag.Parse()
+
+	err := log.DefaultLogger().SetThresholdByName(*logLevel)
+	if err != nil {
+		log.ErrorExit(err)
+	}
 
 	var config aptcacher.CacherConfig
 	md, err := toml.DecodeFile(*configPath, &config)
